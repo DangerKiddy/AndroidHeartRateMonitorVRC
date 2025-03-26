@@ -1,27 +1,20 @@
 package com.example.androidheartratemonitorvrc;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
-import android.bluetooth.BluetoothGattService;
-import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 
 import com.illposed.osc.*;
-import com.illposed.osc.OSCMessage;
 import com.illposed.osc.argument.ArgumentHandler;
 import com.illposed.osc.argument.handler.Activator;
-import com.illposed.osc.transport.OSCPortIn;
-import com.illposed.osc.transport.OSCPortOut;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -38,11 +31,14 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @SuppressLint("MissingPermission")
 public class MainActivity extends AppCompatActivity {
     public static MainActivity instance;
+
+    public static String routerName = "";
+    public BluetoothDevice ConnectedDevice;
+    private Intent notificationService;
 
     private List<BluetoothDevice> deviceList = new ArrayList<>();
 
@@ -59,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView statusText;
     private TextView bpmText;
 
-    private static final long SCAN_PERIOD = 10000;
+    private static final long SCAN_PERIOD = 20000;
     private boolean isScanning = false;
     private int lastSentBpm = 0;
 
@@ -81,13 +77,33 @@ public class MainActivity extends AppCompatActivity {
         bpmText = (TextView) findViewById(R.id.BPMText);
 
         statusText = (TextView) findViewById(R.id.StatusText);
-        statusText.setText("Press scan button to connect device");
+        statusText.setText("");
 
+        TryInitBluetooth();
+    }
+
+    public void TryInitBluetooth()
+    {
+        Log.i("HRTrack", "Trying to init Bluetooth");
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-            statusText.setText("No Bluetooth permission!");
+            Log.i("HRTrack", "No permission for bluetooth, requesting");
+
+            statusText.setText("No permission!");
+
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{
+                            Manifest.permission.BLUETOOTH_SCAN,
+                            Manifest.permission.BLUETOOTH_CONNECT,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                            Manifest.permission.ACCESS_NETWORK_STATE,
+                            Manifest.permission.ACCESS_WIFI_STATE,
+                            Manifest.permission.ACCESS_NETWORK_STATE,
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                    }, 1);
 
             return;
         }
+        statusText.setText("Press scan button to search for pulseoximeter");
 
         SetupOSCSerializer();
 
@@ -102,6 +118,17 @@ public class MainActivity extends AppCompatActivity {
                 if (!deviceList.contains(device)) {
                     deviceList.add(device);
                     Log.d("BLE", "Device found: " + device.getName() + ", " + device.getAddress());
+
+                    Button deviceButton = new Button(MainActivity.this);
+                    deviceButton.setText(device.getName() != null ? device.getName() : device.getAddress());
+
+                    deviceButton.setOnClickListener(view -> {
+                        Log.d("BLE Scan", "Connecting to " + deviceButton.getText());
+
+                        ConnectToDevice(device);
+                    });
+
+                    layout.addView(deviceButton);
                 }
             }
             @Override
@@ -119,6 +146,21 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == 1) {
+            if (grantResults.length > 0)
+
+            if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                TryInitBluetooth();
+            }
+        }
+    }
+
     public void startScan() {
         if (isScanning)
             return;
@@ -131,84 +173,51 @@ public class MainActivity extends AppCompatActivity {
             scanBtn.setActivated(true);
 
             bluetoothLeScanner.stopScan(leScanCallback);
-            updateLayoutWithDevices();
         }, SCAN_PERIOD);
 
         isScanning = true;
         bluetoothLeScanner.startScan(leScanCallback);
     }
 
-    private void updateLayoutWithDevices() {
-        statusText.setText("Found " + deviceList.size() + " device(s)");
-
-        for (BluetoothDevice device : deviceList) {
-            Button deviceButton = new Button(this);
-            deviceButton.setText(device.getName() != null ? device.getName() : device.getAddress());
-
-            deviceButton.setOnClickListener(view -> {
-                Log.d("BLE Scan", "Connecting to " + deviceButton.getText());
-
-                ConnectToDevice(device);
-            });
-
-            layout.addView(deviceButton);
-        }
-    }
-
     private void ConnectToDevice(BluetoothDevice device)
     {
-        BluetoothGatt bluetoothGatt = device.connectGatt(this, false, new BluetoothGattCallback() {
-            @Override
-            public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-                if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    Log.d("BLE", "Connected to GATT server.");
-                    gatt.discoverServices();
-                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    Log.d("BLE", "Disconnected from GATT server.");
-                }
-            }
+        ConnectedDevice = device;
 
-            @Override
-            public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    BluetoothGattService heartRateService = gatt.getService(UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")); // Heart Rate Service
-                    if (heartRateService != null) {
-                        BluetoothGattCharacteristic heartRateCharacteristic = heartRateService.getCharacteristic(UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb"));
+        InitNotificationManager();
+    }
 
-                        gatt.setCharacteristicNotification(heartRateCharacteristic, true);
+    /// Used to keep BPM tracker alive even when phone is in sleep mode (screen locked)
+    private void InitNotificationManager()
+    {
+        notificationService = new Intent(this, NotificationService.class);
+        startForegroundService(notificationService);
+    }
 
-                        BluetoothGattDescriptor descriptor = heartRateCharacteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
-                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                        gatt.writeDescriptor(descriptor);
-                    }
-                }
-            }
+    public void OnBPMReceived(int heartRate)
+    {
+        Log.d("BLE", "Heart Rate: " + heartRate);
 
-            @Override
-            public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-                if (UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb").equals(characteristic.getUuid())) {
-                    int flag = characteristic.getProperties();
-                    int format = (flag & 0x01) != 0 ? BluetoothGattCharacteristic.FORMAT_UINT16 : BluetoothGattCharacteristic.FORMAT_UINT8;
-                    int heartRate = characteristic.getIntValue(format, 1);
-                    Log.d("BLE", "Heart Rate: " + heartRate);
+        StringBuilder zeros = new StringBuilder();
+        String bpmStr = heartRate + "";
+        for (int i = 0; i < 3 - bpmStr.length(); i++)
+        {
+            zeros.append('0');
+        }
 
-                    bpmText.setText("BPM: " + heartRate);
+        bpmText.setText(zeros.toString() + heartRate);
 
-                    if (!isLookingForDevice)
-                    {
-                        isLookingForDevice = true;
-                        LookForRouter();
-                    }
+        if (!isLookingForDevice)
+        {
+            isLookingForDevice = true;
+            LookForRouter();
+        }
 
-                    if (oscController != null && heartRate != lastSentBpm)
-                    {
-                        lastSentBpm = heartRate;
+        if (oscController != null && heartRate != lastSentBpm)
+        {
+            lastSentBpm = heartRate;
 
-                        oscController.Send("/heartrate", heartRate);
-                    }
-                }
-            }
-        });
+            oscController.Send("/heartrate", heartRate);
+        }
     }
 
     private void SetupOSCSerializer()
@@ -238,15 +247,30 @@ public class MainActivity extends AppCompatActivity {
         instance.statusText.setText(text);
     }
 
-    public static void SetOSCController(String ip)
+    public static void SetOSCController(String ip, String name)
     {
         instance.oscController = new OSCController(ip, GetOSCSerializer());
         instance.oscController.SetPort(28013);
 
         instance.oscController.CreateSender();
+
+        String finalName = name;
+        if (name.isEmpty())
+            finalName = ip;
+
+        routerName = finalName;
     }
+
     public static OSCSerializerAndParserBuilder GetOSCSerializer()
     {
         return instance.oscSerializer;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if (notificationService != null)
+            stopService(notificationService);
     }
 }

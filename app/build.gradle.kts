@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.androidheartratemonitorvrc"
-        minSdk = 24
+        minSdk = 34
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -32,7 +32,7 @@ android {
 }
 
 dependencies {
-
+    implementation("androidx.work:work-runtime:2.7.0")
     implementation("com.illposed.osc:javaosc-core:0.8")
     implementation(libs.appcompat)
     implementation(libs.material)

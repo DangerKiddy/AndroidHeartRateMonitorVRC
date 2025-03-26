@@ -85,7 +85,7 @@ public class OSCController {
                         if (Objects.equals(event.getMessage().getAddress(), "/confirmAddress"))
                         {
                             String ip = (String)event.getMessage().getArguments().get(0);
-                            //String ip = controller.host;
+
                             String name = NetworkScanTask.GetNetworkName(ip);
                             Log.d("OSC", controller.host);
                             Log.i("OSC", "Found HR streaming device " + sender + "(" + name + ")");
@@ -93,7 +93,7 @@ public class OSCController {
 
                             NetworkScanTask.CloseAllTestConnection();
 
-                            MainActivity.SetOSCController(ip);
+                            MainActivity.SetOSCController(ip, name);
                         }
                     }
                     catch (Exception e)
