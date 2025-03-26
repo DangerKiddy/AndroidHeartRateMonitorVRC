@@ -16,7 +16,6 @@ import com.illposed.osc.*;
 import com.illposed.osc.argument.ArgumentHandler;
 import com.illposed.osc.argument.handler.Activator;
 
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.graphics.Insets;
@@ -64,7 +63,6 @@ public class MainActivity extends AppCompatActivity {
         instance = this;
 
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -240,6 +238,17 @@ public class MainActivity extends AppCompatActivity {
 
         Context context = instance.getApplicationContext();
         new NetworkScanTask(context).execute();
+    }
+
+    public void FailedSearchingRouter()
+    {
+        statusText.setText("Failed to find PC! Retrying in 5 seconds");
+
+        handler.postDelayed(() -> {
+            if (oscController == null)
+                isLookingForDevice = false;
+
+        }, 5000);
     }
 
     public static void SetStatusText(String text)

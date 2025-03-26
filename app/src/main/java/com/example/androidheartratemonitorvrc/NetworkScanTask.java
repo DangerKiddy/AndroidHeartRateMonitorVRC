@@ -95,6 +95,9 @@ class NetworkScanTask extends AsyncTask<Void, Void, Void> {
                     oscTestConnections.put(testIp, testConnection);
 
                     testConnection.TryConnect();
+
+                    if (i == 254)
+                        MainActivity.instance.FailedSearchingRouter();
                 } else
                     Log.w("NetworkScan", "Skipping our ip");
             }

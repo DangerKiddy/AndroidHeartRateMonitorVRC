@@ -99,6 +99,13 @@ public class NotificationService extends Service {
         return null;
     }
 
+    @Override
+    public void onDestroy() {
+        notificationManager.cancelAll();
+
+        super.onDestroy();
+    }
+
     public void updateNotification(int heartRate) {
         Notification notification = createNotification(heartRate);
         notificationManager.notify(NOTIFICATION_ID, notification);
@@ -113,6 +120,9 @@ public class NotificationService extends Service {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setOngoing(true)
 
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setWhen(0)
                 .setShowWhen(false)
 
@@ -138,6 +148,9 @@ public class NotificationService extends Service {
         channel.setVibrationPattern(null);
         channel.setDescription("Displays current BPM and status connection");
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        channel.enableLights(false);
+        channel.setShowBadge(false);
+        channel.enableVibration(false);
 
         notificationManager.createNotificationChannel(channel);
     }
